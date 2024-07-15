@@ -1,3 +1,5 @@
+use secrecy::{ExposeSecret, Secret};
+
 use crate::database::{basic::Zero2ProdDatabase, postgres::pool::PostgresPool};
 
 pub type DBPool = PostgresPool;
@@ -11,7 +13,8 @@ pub struct Settings {
 #[derive(serde::Deserialize)]
 pub struct DatabaseSettings {
     pub username: String,
-    pub password: String,
+    // 혹시 모를 로깅에 대비해서 `Secret<T>`를 사용한다.
+    pub password: Secret<String>,
     pub port: u16,
     pub host: String,
     pub database_name: String,
@@ -37,19 +40,26 @@ impl Settings {
 }
 
 impl DatabaseSettings {
+    // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
     fn connection_string_without_db(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password, self.host, self.port,
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
         )
+        .into()
     }
 
+    // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
     fn connection_string(&self) -> String {
         format!(
             "{}/{}",
             &self.connection_string_without_db(),
             &self.database_name
         )
+        .into()
     }
 
     pub async fn connect(&self) -> Result<DBPool, sqlx::Error> {

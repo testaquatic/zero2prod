@@ -1,4 +1,5 @@
-use actix_web::{dev::Server, middleware::Logger, web, App, HttpServer};
+use actix_web::{dev::Server, web, App, HttpServer};
+use tracing_actix_web::TracingLogger;
 
 use crate::{
     configuration::DBPool,
@@ -14,7 +15,8 @@ pub fn run(listener: tokio::net::TcpListener, pool: DBPool) -> Result<Server, st
     let server = HttpServer::new(move || {
         App::new()
             // `App`에 대해 `wrap` 메서드를 사용해서 미들웨어들을 추가한다.
-            .wrap(Logger::default())
+            // `Logger::default`를 대신한다.
+            .wrap(TracingLogger::default())
             .route("/", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
             // POST /subcriptions 요청에 대한 라우팅 테이블의 새 엔트리 포인트
