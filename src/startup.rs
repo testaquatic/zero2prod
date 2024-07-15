@@ -7,7 +7,11 @@ use crate::{
 };
 
 // `run`을 `public`으로 마크해야 한다.
-pub fn run(listener: tokio::net::TcpListener, pool: DBPool) -> Result<Server, std::io::Error> {
+// 번쩍번쩍 아름다운 새로운 서버
+pub fn new_server(
+    listener: tokio::net::TcpListener,
+    pool: DBPool,
+) -> Result<Server, std::io::Error> {
     // web::Data로 pool을 감싼다.
     // Arc 스마트 포인터로 요약된다.
     let pool = web::Data::new(pool);

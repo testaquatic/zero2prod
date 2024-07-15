@@ -1,12 +1,10 @@
-/// `TEST_LOG` 를 `true`로 설정하면 테스트 할 때 로그를 출력할 수 있다.
-/// bunyan은 `cargo install bunyan`으로 설치할 수 있다.
-/// `TEST_LOG=true cargo test health_check_works | bunyan`
 use sqlx::Executor;
 use std::sync::Once;
 use tracing::Subscriber;
 use uuid::Uuid;
 use zero2prod::{
-    configuration::{DBPool, DatabaseSettings, Settings},
+    configuration::{DatabaseSettings, Settings},
+    startup::new_server,
     telemetry::{get_tracing_subscriber, init_tracing_subscriber},
 };
 
@@ -39,8 +37,7 @@ fn init_test_tracing_subscriber() {
 }
 
 pub struct TestApp {
-    pub address: String,
-    pub db_pool: DBPool,
+    pub configuration: Settings,
 }
 
 impl TestApp {
@@ -49,34 +46,46 @@ impl TestApp {
     async fn spawn_app() -> Self {
         init_test_tracing_subscriber();
 
+        // 설정을 읽어온다.
+        let mut configuration =
+            Settings::get_configuration().expect("Failed to read configuration.");
+
+        // 데이터베이스를 설정한다.
+        configuration.database.database_name = Uuid::new_v4().to_string();
+        configure_database(&mut configuration.database).await;
+
+        // TcpListener를 설정한다.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("Failed to bind random port.");
+        configuration.application.host = "127.0.0.1".to_string();
         // OS가 할당한 포트 번호를 추출한다.
-        let port = listener.local_addr().unwrap().port();
-        let address = format!("http://127.0.0.1:{}", port);
+        configuration.application.port = listener.local_addr().unwrap().port();
 
-        let mut configuration =
-            Settings::get_configuration().expect("Failed to read configuration.");
-        configuration.database.database_name = Uuid::new_v4().to_string();
-        let db_pool = configure_database(&configuration.database).await;
-
-        let server =
-            zero2prod::startup::run(listener, db_pool.clone()).expect("Failed to run server.");
+        // 서버를 생성한다.
+        let db_pool = configuration.database.connect().await.unwrap();
+        let server = new_server(listener, db_pool.clone()).unwrap();
 
         // 서버를 백그라운드로 구동한다.
         // tokio::spawn은 생성된 퓨처에 대한 핸들을 반환한다.
         // 하지면 여기에서는 사용하지 않으므로 let을 바인딩하지 않는다.
         let _ = tokio::spawn(server);
-        Self { address, db_pool }
+        Self { configuration }
+    }
+
+    fn get_address(&self) -> String {
+        format!(
+            "http://{}:{}",
+            &self.configuration.application.host, &self.configuration.application.port
+        )
     }
 
     fn subcriptions_url(&self) -> String {
-        format!("{}/subscriptions", self.address)
+        format!("{}/subscriptions", &self.get_address())
     }
 }
 
-pub async fn configure_database(config: &DatabaseSettings) -> DBPool {
+pub async fn configure_database(config: &mut DatabaseSettings) {
     // 데이터베이스를 생성한다.
     let pool = config
         .connect_without_db()
@@ -97,8 +106,6 @@ pub async fn configure_database(config: &DatabaseSettings) -> DBPool {
         .run(&*pool)
         .await
         .expect("Failed to migrate the database.");
-
-    pool
 }
 
 // `tokio::test`는 테스팅에 있어서 `tokio::main`과 동등하다.
@@ -115,7 +122,7 @@ async fn health_check_works() {
     // 실행
     let response = client
         // 반환된 애플리케이션 주소를 사용한다.
-        .get(&format!("{}/health_check", &app.address))
+        .get(&format!("{}/health_check", &app.get_address()))
         .send()
         .await
         .expect("Failed to execute request.");
@@ -150,13 +157,14 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     // 응답이 200 OK인지 확인한다.
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
+    let db_pool = app.configuration.database.connect().await.unwrap();
     let saved = sqlx::query!(
         r#"
         SELECT email, name
         FROM subscriptions
         "#,
     )
-    .fetch_one(&*app.db_pool)
+    .fetch_one(&*db_pool)
     .await
     .expect("Failed to fetch save subcriptions.");
 

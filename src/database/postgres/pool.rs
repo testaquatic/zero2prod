@@ -1,6 +1,9 @@
 use std::ops::Deref;
 
-use sqlx::{postgres::PgQueryResult, PgPool};
+use sqlx::{
+    postgres::{PgPoolOptions, PgQueryResult},
+    PgPool,
+};
 
 use crate::database::basic::Zero2ProdDatabase;
 
@@ -17,7 +20,10 @@ impl Zero2ProdDatabase for PostgresPool {
 
     async fn connect(pg_address: &str) -> Result<Self, sqlx::Error> {
         // `?` 연산자를 사용해서 함수가 실패하면, 조기에 sqlx::Error를 반환한다.
-        let pg_pool = PgPool::connect(pg_address).await?;
+        // 풀이 처음 사용될 때만 커넥션 연결을 시도한다.
+        let pg_pool = PgPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(2))
+            .connect_lazy(pg_address)?;
         let postgres_pool = Self { pg_pool };
         Ok(postgres_pool)
     }
