@@ -49,7 +49,6 @@ impl DatabaseSettings {
             self.host,
             self.port,
         )
-        .into()
     }
 
     // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
@@ -59,7 +58,6 @@ impl DatabaseSettings {
             &self.connection_string_without_db(),
             &self.database_name
         )
-        .into()
     }
 
     pub async fn connect(&self) -> Result<DBPool, sqlx::Error> {
