@@ -44,9 +44,9 @@ impl Settings {
         // 구성 읽기를 초기화한다.
         let settings = config::Config::builder()
             // `configuration.json`이라는 파일로부터 구성값을 추가한다.
-            .add_source(config::File::from(config::File::from(
+            .add_source(config::File::from(
                 configuration_directory.join("base.json"),
-            )))
+            ))
             .add_source(config::File::from(
                 configuration_directory.join(environment_filename),
             ))
