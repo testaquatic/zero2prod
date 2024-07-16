@@ -1,9 +1,8 @@
 use std::ops::Deref;
 
-use chrono::{DateTime, Utc};
-use sqlx::{types::Uuid, ConnectOptions, Database};
+use sqlx::{ConnectOptions, Database};
 
-use crate::configuration::DatabaseSettings;
+use crate::{configuration::DatabaseSettings, domain::NewSubscriber};
 
 /// 데이터베이스 변경을 편하게 하기 위한 트레이트
 #[trait_variant::make()]
@@ -17,12 +16,9 @@ pub trait Zero2ProdDatabase: Deref<Target = sqlx::Pool<Self::DB>> {
     ) -> Result<Self::ConnectOutput, sqlx::Error>;
 
     /// 구독자를 DB에 추가한다.
-    async fn insert_subscriptions(
+    async fn insert_subscriber(
         &self,
-        id: Uuid,
-        email: &str,
-        name: &str,
-        subscribed_at: DateTime<Utc>,
+        new_subscriber: &NewSubscriber,
     ) -> Result<<Self::DB as sqlx::Database>::QueryResult, sqlx::Error>;
 
     fn connect_option_without_db(

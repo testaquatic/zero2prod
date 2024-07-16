@@ -31,7 +31,7 @@
   => 200 OK
 
 - /subscriptions 엔드포인트 확인  
-  `curl --request POST --data 'email=thomas_mann@hotmail.com&name=Tom' --verbose http://127.0.0.1:8000/subscriptions`
+  `curl --request POST --data 'email=thomas_mann@hotmail.com&name=Tom' --verbose http://127.0.0.1:8000/subscriptions` => 200 OK
 
 - `TEST_LOG` 를 `true`로 설정하면 테스트 할 때 로그를 출력할 수 있다.  
   bunyan은 `cargo install bunyan`으로 설치할 수 있다.  

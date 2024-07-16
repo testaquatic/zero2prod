@@ -1,7 +1,8 @@
+//! Postgres의 쿼리
+
 use sqlx::{postgres::PgQueryResult, PgExecutor};
 
-// 구독자를 DB에 추가한다.
-
+/// 구독자를 DB에 추가한다.
 #[tracing::instrument(name = "Saving new subscriber details in the database.", skip_all)]
 pub async fn pg_insert_subscriptions(
     executor: impl PgExecutor<'_>,

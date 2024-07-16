@@ -38,6 +38,8 @@ secrecy = { version = "0.8", features = ["serde"] }
 tracing-actix-web = "0.7"
 anyhow = "1"
 serde-aux = "4"
+unicode-segmentation = "1"
+claim = "0.5"
 
 # 테이블과 유사한 toml 구문을 사용해서 긴 행을 줄인다.
 [dependencies.sqlx]

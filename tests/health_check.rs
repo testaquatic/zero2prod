@@ -3,7 +3,7 @@ use std::sync::Once;
 use tracing::Subscriber;
 use uuid::Uuid;
 use zero2prod::{
-    configuration::Settings,
+    configuration::{DefaultDBPool, Settings},
     database::{basic::Zero2ProdDatabase, postgres::pool::PostgresPool},
     startup::new_server,
     telemetry::{get_tracing_subscriber, init_tracing_subscriber},
@@ -109,7 +109,7 @@ impl TestApp {
     /// 데이터베이스를 마이그레이션 한다.
     async fn migrate_database(&self) {
         // 데이터베이스를 마이그레이션 한다.
-        let db_pool = PostgresPool::connect(&self.configuration.database)
+        let db_pool = DefaultDBPool::connect(&self.configuration.database)
             .await
             .expect("Failed to connect Postgres.");
         sqlx::migrate!("./migrations")
@@ -136,6 +136,7 @@ impl TestApp {
 // `cargo expand --test health_check`을 사용해서 코드가 무엇을 생성하는지 확인할 수 있다.
 #[tokio::test]
 async fn health_check_works() {
+    // 테스트 데이터
     // 준비
     let app = TestApp::spawn_app().await;
     // `reqwest`를 사용해서 애플리케이션에 대한 HTTP 요청을 수행한다.
@@ -158,12 +159,14 @@ async fn health_check_works() {
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
+    // 테스트 데이터
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
     // 준비
     let app = TestApp::spawn_app().await;
     let client = reqwest::Client::new();
 
     // 실행
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     let response = client
         .post(app.subcriptions_url())
         .header(
@@ -180,6 +183,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
     let db_pool = app.configuration.database.connect().await.unwrap();
+    // NoSQL이 아니라면 호환이 되겠지
     let saved = sqlx::query!(
         r#"
         SELECT email, name
@@ -196,14 +200,16 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
-    // 준비
-    let app = TestApp::spawn_app().await;
-    let client = reqwest::Client::new();
+    // 테스트 데이터
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_le_guin%40gmail.com", "missing the name"),
         ("", "missing both name and email"),
     ];
+
+    // 준비
+    let app = TestApp::spawn_app().await;
+    let client = reqwest::Client::new();
 
     for (invalid_body, error_messages) in test_cases {
         // 실행
@@ -226,6 +232,40 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             // 테스트 실패시 출력할 커스터마이즈된 추가 오류 메시지
             "The API did not fail with 400 BAD_REQUEST when the payload was {}.",
             error_messages
+        );
+    }
+}
+
+#[tokio::test]
+async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
+    // 테스트 데이터
+    let test_cases = vec![
+        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
+        ("name=Ursula&email=", "empty email"),
+        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
+    ];
+    // 준비
+    let app = TestApp::spawn_app().await;
+    let client = reqwest::Client::new();
+
+    for (body, description) in test_cases {
+        // 실행
+        let response = client
+            .post(&app.subcriptions_url())
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute request.");
+        // 확인
+        assert_eq!(
+            reqwest::StatusCode::BAD_REQUEST,
+            response.status(),
+            "The API did not return a 200 OK when the payload was {}.",
+            description
         );
     }
 }

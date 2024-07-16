@@ -1,12 +1,15 @@
 use std::ops::Deref;
 
+use chrono::Utc;
 use secrecy::ExposeSecret;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, PgQueryResult, PgSslMode},
     PgPool, Postgres,
 };
 
-use crate::{configuration::DatabaseSettings, database::basic::Zero2ProdDatabase};
+use crate::{
+    configuration::DatabaseSettings, database::basic::Zero2ProdDatabase, domain::NewSubscriber,
+};
 
 use super::pg_insert_subscriptions;
 
@@ -52,13 +55,15 @@ impl Zero2ProdDatabase for PostgresPool {
         // 노이즈를 줄이려고 INFO를 TRACE로 변경하는 것이 이해가 되지 않는다.
     }
 
-    async fn insert_subscriptions(
+    async fn insert_subscriber(
         &self,
-        id: uuid::Uuid,
-        email: &str,
-        name: &str,
-        subscribed_at: chrono::DateTime<chrono::Utc>,
+        new_subscriber: &NewSubscriber,
     ) -> Result<PgQueryResult, sqlx::Error> {
+        let id = uuid::Uuid::new_v4();
+        let subscribed_at = Utc::now();
+        let email = &new_subscriber.email;
+        // 이제 `as_ref`를 사용한다.
+        let name = new_subscriber.name.as_ref();
         pg_insert_subscriptions(&self.pg_pool, id, email, name, subscribed_at).await
     }
 }

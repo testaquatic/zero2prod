@@ -1,3 +1,4 @@
+//! 로그를 관리한다.
 use std::sync::Once;
 
 use tracing::{subscriber::set_global_default, Subscriber};
