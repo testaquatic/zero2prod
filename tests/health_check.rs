@@ -4,7 +4,7 @@ use std::sync::Once;
 use tracing::Subscriber;
 use uuid::Uuid;
 use zero2prod::{
-    configuration::{DatabaseSettings, Settings},
+    configuration::Settings,
     startup::new_server,
     telemetry::{get_tracing_subscriber, init_tracing_subscriber},
 };
@@ -44,77 +44,94 @@ pub struct TestApp {
 impl TestApp {
     // 백그라운드에서 애플리케이션을 구동한다.
     // 이 함수는 이제 비동기이다.
-    async fn spawn_app() -> Self {
+    pub async fn spawn_app() -> Self {
         init_test_tracing_subscriber();
 
         // 설정을 읽어온다.
-        let mut configuration =
-            Settings::get_configuration().expect("Failed to read configuration.");
+        let configuration = Settings::get_configuration().expect("Failed to read configuration.");
+        let mut app = TestApp { configuration };
 
         // 데이터베이스를 설정한다.
-        configure_database(&mut configuration.database).await;
+        app.set_database().await;
+        let db_pool = app
+            .configuration
+            .database
+            .connect()
+            .await
+            .expect("Failed to set database.");
 
         // TcpListener를 설정한다.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("Failed to bind random port.");
-        configuration.application.host = "127.0.0.1".to_string();
+        app.configuration.application.host = "127.0.0.1".to_string();
         // OS가 할당한 포트 번호를 추출한다.
-        configuration.application.port = listener.local_addr().unwrap().port();
+        app.configuration.application.port = listener.local_addr().unwrap().port();
 
-        // 서버를 생성한다.
-        let db_pool = configuration.database.connect().await.unwrap();
+        // 반짝반짝한 새 서버를 생성한다.
         let server = new_server(listener, db_pool).unwrap();
 
         // 서버를 백그라운드로 구동한다.
         // tokio::spawn은 생성된 퓨처에 대한 핸들을 반환한다.
         // 하지면 여기에서는 사용하지 않으므로 let을 바인딩하지 않는다.
         let _ = tokio::spawn(server);
-        Self { configuration }
+
+        app
     }
 
-    fn get_address(&self) -> String {
+    /// 데이터 베이스를 설정한다.
+    pub async fn set_database(&mut self) {
+        self.create_random_database().await;
+        self.migrate_database().await;
+    }
+
+    /// 테스트를 위한 무작위 데이터베이스를 생성한다.
+    async fn create_random_database(&mut self) {
+        let database = &mut self.configuration.database;
+        // 데이터베이스를 생성한다.
+        database.database_name = Uuid::new_v4().to_string();
+        let db_url = format!(
+            "postgres://{}:{}@{}:{}",
+            &database.username,
+            &database.password.expose_secret(),
+            &database.host,
+            &database.port
+        );
+        let pool = PgPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(2))
+            .connect(&db_url)
+            .await
+            .expect("Failed to connect to Postgres.");
+        pool.execute(format!(r#"CREATE DATABASE "{}""#, database.database_name).as_str())
+            .await
+            .expect("Failed to create database.");
+    }
+
+    /// 데이터베이스를 마이그레이션 한다.
+    async fn migrate_database(&self) {
+        // 데이터베이스를 마이그레이션 한다.
+        let pool = self
+            .configuration
+            .database
+            .connect()
+            .await
+            .expect("Failed to connect to Postgres.");
+        sqlx::migrate!("./migrations")
+            .run(&*pool)
+            .await
+            .expect("Failed to migrate the database.");
+    }
+
+    fn http_address(&self) -> String {
         format!(
             "http://{}:{}",
             &self.configuration.application.host, &self.configuration.application.port
         )
     }
 
-    fn subcriptions_url(&self) -> String {
-        format!("{}/subscriptions", &self.get_address())
+    pub fn subcriptions_url(&self) -> String {
+        format!("{}/subscriptions", &self.http_address())
     }
-}
-
-pub async fn configure_database(config: &mut DatabaseSettings) {
-    // 데이터베이스를 생성한다.
-    config.database_name = Uuid::new_v4().to_string();
-    let db_url = format!(
-        "postgres://{}:{}@{}:{}",
-        &config.username,
-        &config.password.expose_secret(),
-        &config.host,
-        &config.port
-    );
-    let pool = PgPoolOptions::new()
-        .acquire_timeout(std::time::Duration::from_secs(2))
-        .connect(&db_url)
-        .await
-        .expect("Failed to connect to Postgres.");
-
-    pool.execute(format!(r#"CREATE DATABASE "{}""#, config.database_name).as_str())
-        .await
-        .expect("Failed to create database.");
-
-    // 데이터베이스를 마이그레이션 한다.
-    let pool = config
-        .connect()
-        .await
-        .expect("Failed to connect to Postgres.");
-
-    sqlx::migrate!("./migrations")
-        .run(&*pool)
-        .await
-        .expect("Failed to migrate the database.");
 }
 
 // `tokio::test`는 테스팅에 있어서 `tokio::main`과 동등하다.
@@ -131,7 +148,7 @@ async fn health_check_works() {
     // 실행
     let response = client
         // 반환된 애플리케이션 주소를 사용한다.
-        .get(&format!("{}/health_check", &app.get_address()))
+        .get(&format!("{}/health_check", &app.http_address()))
         .send()
         .await
         .expect("Failed to execute request.");

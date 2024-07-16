@@ -50,6 +50,13 @@ impl Settings {
             .add_source(config::File::from(
                 configuration_directory.join(environment_filename),
             ))
+            // 환경 변수로부터 설정에 추가한다.
+            // APP, `__` 접두사를 붙인다.
+            .add_source(
+                config::Environment::with_prefix("APP")
+                    .prefix_separator("_")
+                    .separator("__"),
+            )
             .build()?;
         // 읽은 구성값을 Settings 타입으로 변환한다.
         settings.try_deserialize()
