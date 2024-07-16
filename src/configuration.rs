@@ -1,8 +1,10 @@
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
+use serde_aux::field_attributes::deserialize_number_from_string;
 
 use crate::database::{basic::Zero2ProdDatabase, postgres::pool::PostgresPool};
 
-pub type DBPool = PostgresPool;
+/// 코드의 변경을 줄이면서 데이터베이스 변경을 할 수 있다.
+pub type DefaultDBPool = PostgresPool;
 
 #[derive(serde::Deserialize, Clone)]
 pub struct Settings {
@@ -15,13 +17,17 @@ pub struct DatabaseSettings {
     pub username: String,
     // 혹시 모를 로깅에 대비해서 `Secret<T>`를 사용한다.
     pub password: Secret<String>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub host: String,
     pub database_name: String,
+    // 커넥션의 암호화 요청 여부를 결정한다.
+    pub require_ssl: bool,
 }
 
 #[derive(serde::Deserialize, Clone)]
 pub struct ApplicationSettings {
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub host: String,
 }
@@ -52,6 +58,7 @@ impl Settings {
             ))
             // 환경 변수로부터 설정에 추가한다.
             // APP, `__` 접두사를 붙인다.
+            // `APP_APPLICATION__PORT` => `Settings.application.port`
             .add_source(
                 config::Environment::with_prefix("APP")
                     .prefix_separator("_")
@@ -94,19 +101,9 @@ impl TryFrom<&str> for Environment {
 
 impl DatabaseSettings {
     // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
-    pub fn connection_string(&self) -> String {
-        format!(
-            "postgres://{}:{}@{}:{}/{}",
-            &self.username,
-            &self.password.expose_secret(),
-            &self.host,
-            &self.port,
-            &self.database_name
-        )
-    }
 
-    pub async fn connect(&self) -> Result<DBPool, sqlx::Error> {
-        DBPool::connect(self).await
+    pub async fn connect(&self) -> Result<DefaultDBPool, sqlx::Error> {
+        DefaultDBPool::connect(self).await
     }
 }
 

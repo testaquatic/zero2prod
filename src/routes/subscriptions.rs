@@ -2,7 +2,7 @@ use actix_web::{web, HttpResponse};
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::{configuration::DBPool, database::basic::Zero2ProdDatabase};
+use crate::{configuration::DefaultDBPool, database::basic::Zero2ProdDatabase};
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -23,7 +23,7 @@ pub struct FormData {
 pub async fn subscribe(
     form: web::Form<FormData>,
     // 애플리케이션 상태에서 커넥션을 꺼낸다.
-    pool: web::Data<DBPool>,
+    pool: web::Data<DefaultDBPool>,
 ) -> HttpResponse {
     // `Result`는 `Ok`와 `Err`라는 두 개의 변형을 갖는다.
     // 첫번째는 성공, 두 번째는 실패를 의미한다.

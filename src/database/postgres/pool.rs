@@ -1,7 +1,8 @@
 use std::ops::Deref;
 
+use secrecy::ExposeSecret;
 use sqlx::{
-    postgres::{PgPoolOptions, PgQueryResult},
+    postgres::{PgConnectOptions, PgPoolOptions, PgQueryResult, PgSslMode},
     PgPool, Postgres,
 };
 
@@ -19,13 +20,36 @@ impl Zero2ProdDatabase for PostgresPool {
     type ConnectOutput = Self;
 
     async fn connect(database_settings: &DatabaseSettings) -> Result<Self, sqlx::Error> {
-        // `?` 연산자를 사용해서 함수가 실패하면, 조기에 sqlx::Error를 반환한다.
-        // 풀이 처음 사용될 때만 커넥션 연결을 시도한다.
         let pg_pool = PgPoolOptions::new()
             .acquire_timeout(std::time::Duration::from_secs(2))
-            .connect_lazy(&database_settings.connection_string())?;
+            .connect_lazy_with(Self::connect_option_with_db(database_settings));
         let postgres_pool = Self { pg_pool };
         Ok(postgres_pool)
+    }
+
+    #[allow(refining_impl_trait)]
+    fn connect_option_without_db(database_settings: &DatabaseSettings) -> PgConnectOptions {
+        let ssl_mod = if database_settings.require_ssl {
+            PgSslMode::Require
+        } else {
+            // 암호화된 커넥션을 시도한다.
+            // 실패하면 암호화되지 않은 커넥션을 사용한다.
+            PgSslMode::Prefer
+        };
+        PgConnectOptions::new()
+            .host(&database_settings.host)
+            .username(&database_settings.username)
+            .password(database_settings.password.expose_secret())
+            .port(database_settings.port)
+            .ssl_mode(ssl_mod)
+    }
+
+    #[allow(refining_impl_trait)]
+    fn connect_option_with_db(database_settings: &DatabaseSettings) -> PgConnectOptions {
+        Self::connect_option_without_db(database_settings)
+            .database(&database_settings.database_name)
+        // ``.log_statements`은 대한 부분은 저자의 예시 코드에도 보이지 않는다.
+        // 노이즈를 줄이려고 INFO를 TRACE로 변경하는 것이 이해가 되지 않는다.
     }
 
     async fn insert_subscriptions(

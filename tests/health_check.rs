@@ -1,10 +1,10 @@
-use secrecy::ExposeSecret;
-use sqlx::{postgres::PgPoolOptions, Executor};
+use sqlx::{Connection, Executor, PgConnection};
 use std::sync::Once;
 use tracing::Subscriber;
 use uuid::Uuid;
 use zero2prod::{
     configuration::Settings,
+    database::{basic::Zero2ProdDatabase, postgres::pool::PostgresPool},
     startup::new_server,
     telemetry::{get_tracing_subscriber, init_tracing_subscriber},
 };
@@ -87,22 +87,21 @@ impl TestApp {
 
     /// 테스트를 위한 무작위 데이터베이스를 생성한다.
     async fn create_random_database(&mut self) {
-        let database = &mut self.configuration.database;
-        // 데이터베이스를 생성한다.
-        database.database_name = Uuid::new_v4().to_string();
-        let db_url = format!(
-            "postgres://{}:{}@{}:{}",
-            &database.username,
-            &database.password.expose_secret(),
-            &database.host,
-            &database.port
-        );
-        let pool = PgPoolOptions::new()
-            .acquire_timeout(std::time::Duration::from_secs(2))
-            .connect(&db_url)
-            .await
-            .expect("Failed to connect to Postgres.");
-        pool.execute(format!(r#"CREATE DATABASE "{}""#, database.database_name).as_str())
+        self.configuration.database.database_name = Uuid::new_v4().to_string();
+        let mut connection = PgConnection::connect_with(&PostgresPool::connect_option_without_db(
+            &self.configuration.database,
+        ))
+        .await
+        .expect("Failed to connect to Postgres.");
+
+        connection
+            .execute(
+                format!(
+                    r#"CREATE DATABASE "{}""#,
+                    &self.configuration.database.database_name
+                )
+                .as_str(),
+            )
             .await
             .expect("Failed to create database.");
     }
@@ -110,14 +109,11 @@ impl TestApp {
     /// 데이터베이스를 마이그레이션 한다.
     async fn migrate_database(&self) {
         // 데이터베이스를 마이그레이션 한다.
-        let pool = self
-            .configuration
-            .database
-            .connect()
+        let db_pool = PostgresPool::connect(&self.configuration.database)
             .await
-            .expect("Failed to connect to Postgres.");
+            .expect("Failed to connect Postgres.");
         sqlx::migrate!("./migrations")
-            .run(&*pool)
+            .run(&*db_pool)
             .await
             .expect("Failed to migrate the database.");
     }

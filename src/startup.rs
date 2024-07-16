@@ -2,7 +2,7 @@ use actix_web::{dev::Server, web, App, HttpServer};
 use tracing_actix_web::TracingLogger;
 
 use crate::{
-    configuration::DBPool,
+    configuration::DefaultDBPool,
     routes::{greet, health_check, subscribe},
 };
 
@@ -10,7 +10,7 @@ use crate::{
 // 번쩍번쩍 아름다운 새로운 서버
 pub fn new_server(
     listener: tokio::net::TcpListener,
-    pool: DBPool,
+    pool: DefaultDBPool,
 ) -> Result<Server, std::io::Error> {
     // web::Data로 pool을 감싼다.
     // Arc 스마트 포인터로 요약된다.
