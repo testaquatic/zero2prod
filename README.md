@@ -4,6 +4,14 @@
 
 ## 참고
 
+- 데이터베이스 마이그레이션
+
+  - Postgres 컨테이너 생성:  
+    `./scripts/init_db.sh`
+
+  - Postgres 컨테이너 생성을 하지 않음 :  
+    `SKIP_DOCKER=true ./scripts/init_db.sh`
+
 - sqlx 오프라인 모드  
   `cargo sqlx prepare -- --lib`
 
@@ -12,6 +20,11 @@
 
 - 빌드한 도커 이미지 실행  
   `docker run -p 8000:8000 zero2prod`
+
+- 테스트용 docker-compose 실행  
+  `docker compose up`  
+  (데이터베이스 마이그레이션을 해야한다.)  
+  (`SKIP_DOCKER=true ./scripts/init_db.sh`)
 
 - /healthcheck 엔드포인트 확인  
   `curl http://127.0.0.1:8000/health_check -v`

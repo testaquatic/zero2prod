@@ -12,6 +12,7 @@ async fn main() -> Result<(), anyhow::Error> {
     init_tracing_subscriber(tracing_subscriber);
     // 구성을 읽을 수 없으면 패닉에 빠진다.
     let configuration = Settings::get_configuration().expect("Failed to read configuration.");
+    // `configuration`에 두번이나 접근할 필요 없이 더 깔끔하게 정리할 수 있지 않을까?
     let listener = configuration
         .application
         .get_listener()

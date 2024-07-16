@@ -32,6 +32,13 @@ pub struct ApplicationSettings {
     pub host: String,
 }
 
+/// 애플리케이션이 사용할 수 있는 런타임 환경
+/// `as_str`을 사용할 수 있다.
+pub enum Environment {
+    Local,
+    Production,
+}
+
 impl Settings {
     pub fn get_configuration() -> Result<Self, config::ConfigError> {
         let base_path =
@@ -70,12 +77,6 @@ impl Settings {
     }
 }
 
-/// 애플리케이션이 사용할 수 있는 런타임 환경
-pub enum Environment {
-    Local,
-    Production,
-}
-
 impl Environment {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -102,6 +103,14 @@ impl TryFrom<&str> for Environment {
 impl DatabaseSettings {
     // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
 
+    #[tracing::instrument(
+        name = "Connect to Postgres server.",
+        skip_all,
+        fields(
+            database_host = %self.host,
+            database_port = %self.port,
+        )
+    )]
     pub async fn connect(&self) -> Result<DefaultDBPool, sqlx::Error> {
         DefaultDBPool::connect(self).await
     }

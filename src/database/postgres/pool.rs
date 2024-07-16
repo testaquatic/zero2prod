@@ -48,7 +48,7 @@ impl Zero2ProdDatabase for PostgresPool {
     fn connect_option_with_db(database_settings: &DatabaseSettings) -> PgConnectOptions {
         Self::connect_option_without_db(database_settings)
             .database(&database_settings.database_name)
-        // ``.log_statements`은 대한 부분은 저자의 예시 코드에도 보이지 않는다.
+        // ``.log_statements`은 저자의 예시 코드에도 보이지 않는다.
         // 노이즈를 줄이려고 INFO를 TRACE로 변경하는 것이 이해가 되지 않는다.
     }
 
