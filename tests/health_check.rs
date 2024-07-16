@@ -1,4 +1,5 @@
-use sqlx::Executor;
+use secrecy::ExposeSecret;
+use sqlx::{postgres::PgPoolOptions, Executor};
 use std::sync::Once;
 use tracing::Subscriber;
 use uuid::Uuid;
@@ -51,7 +52,6 @@ impl TestApp {
             Settings::get_configuration().expect("Failed to read configuration.");
 
         // 데이터베이스를 설정한다.
-        configuration.database.database_name = Uuid::new_v4().to_string();
         configure_database(&mut configuration.database).await;
 
         // TcpListener를 설정한다.
@@ -64,7 +64,7 @@ impl TestApp {
 
         // 서버를 생성한다.
         let db_pool = configuration.database.connect().await.unwrap();
-        let server = new_server(listener, db_pool.clone()).unwrap();
+        let server = new_server(listener, db_pool).unwrap();
 
         // 서버를 백그라운드로 구동한다.
         // tokio::spawn은 생성된 퓨처에 대한 핸들을 반환한다.
@@ -87,8 +87,17 @@ impl TestApp {
 
 pub async fn configure_database(config: &mut DatabaseSettings) {
     // 데이터베이스를 생성한다.
-    let pool = config
-        .connect_without_db()
+    config.database_name = Uuid::new_v4().to_string();
+    let db_url = format!(
+        "postgres://{}:{}@{}:{}",
+        &config.username,
+        &config.password.expose_secret(),
+        &config.host,
+        &config.port
+    );
+    let pool = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(2))
+        .connect(&db_url)
         .await
         .expect("Failed to connect to Postgres.");
 

@@ -8,3 +8,4 @@ Cargo.lock
 Dockerfile
 README.md
 .git
+.env

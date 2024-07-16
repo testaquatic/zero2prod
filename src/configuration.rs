@@ -87,31 +87,19 @@ impl TryFrom<&str> for Environment {
 
 impl DatabaseSettings {
     // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
-    fn connection_string_without_db(&self) -> String {
+    pub fn connection_string(&self) -> String {
         format!(
-            "postgres://{}:{}@{}:{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-        )
-    }
-
-    // 비밀번호가 포함되어 있으므로 pub를 붙이지 않고 내부에서만 사용한다.
-    fn connection_string(&self) -> String {
-        format!(
-            "{}/{}",
-            &self.connection_string_without_db(),
+            "postgres://{}:{}@{}:{}/{}",
+            &self.username,
+            &self.password.expose_secret(),
+            &self.host,
+            &self.port,
             &self.database_name
         )
     }
 
     pub async fn connect(&self) -> Result<DBPool, sqlx::Error> {
-        DBPool::connect(&self.connection_string()).await
-    }
-
-    pub async fn connect_without_db(&self) -> Result<DBPool, sqlx::Error> {
-        DBPool::connect(&self.connection_string_without_db()).await
+        DBPool::connect(self).await
     }
 }
 
