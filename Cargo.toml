@@ -39,7 +39,7 @@ tracing-actix-web = "0.7"
 anyhow = "1"
 serde-aux = "4"
 unicode-segmentation = "1"
-claim = "0.5"
+validator = "0.18"
 
 # 테이블과 유사한 toml 구문을 사용해서 긴 행을 줄인다.
 [dependencies.sqlx]
@@ -64,3 +64,7 @@ features = ["clock"]
 # 최종 애플리케이션 바이너리에는 포함되지 않는다.
 [dev-dependencies]
 reqwest = "0.12"
+claim = "0.5"
+fake = "2.9"
+quickcheck = "1"
+quickcheck_macros = "1"
